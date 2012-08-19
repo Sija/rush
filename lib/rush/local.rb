@@ -14,6 +14,17 @@ require 'timeout'
 # of parameters to an executed method is handled by
 # Rush::Connection::Local#receive.
 class Rush::Connection::Local
+	#
+	def system
+		if ::File.directory? '/proc'
+			:linux
+		elsif ::File.directory? 'C:/WINDOWS'
+			:windows
+		else
+			:macosx
+		end
+	end
+  
 	# Write raw bytes to a file.
 	def write_file(full_path, contents)
 		::File.open(full_path, 'w') do |f|
@@ -89,7 +100,7 @@ class Rush::Connection::Local
 
 	# Extract an in-memory archive to a dir.
 	def write_archive(archive, dir)
-		IO.popen("cd #{Rush::quote(dir)}; tar x", "w") do |p|
+		IO.popen("cd #{Rush::quote(dir)}; tar x", 'w') do |p|
 			p.write archive
 		end
 	end
@@ -136,17 +147,25 @@ class Rush::Connection::Local
 	# Fetch the size of a dir, since a standard file stat does not include the
 	# size of the contents.
 	def size(full_path)
-		`du -sb #{Rush.quote(full_path)}`.match(/(\d+)/)[1].to_i
+		case system
+		when :linux
+			`du -sb #{Rush.quote(full_path)}`.match(/(\d+)/)[1].to_i
+		when :macosx
+			`find #{Rush.quote(full_path)} -type f -exec ls -l {} \\; | awk '{sum += $5} END {print sum}'`.to_i
+		when :windows
+			`diruse /* #{Rush.quote(full_path)}`.split("\n").grep(/TOTAL/)[0].match(/(\d+)/)[1].to_i
+		end
 	end
 
 	# Get the list of processes as an array of hashes.
 	def processes
-		if ::File.directory? "/proc"
+		case system
+		when :linux
 			resolve_unix_uids(linux_processes)
-		elsif ::File.directory? "C:/WINDOWS"
-			windows_processes
-		else
+		when :macosx
 			os_x_processes
+		when :windows
+			windows_processes
 		end
 	end
 
@@ -220,7 +239,7 @@ class Rush::Connection::Local
 
 	# Process list on OS X or other unixes without a /proc.
 	def os_x_processes
-		raw = os_x_raw_ps.split("\n").slice(1, 99999)
+		raw = os_x_raw_ps.unpack('C*').pack('U*').split("\n").slice(1, 99999)
 		raw.map do |line|
 			parse_ps(line)
 		end
@@ -228,29 +247,30 @@ class Rush::Connection::Local
 
 	# ps command used to generate list of processes on non-/proc unixes.
 	def os_x_raw_ps
-		`COLUMNS=9999 ps ax -o "pid uid ppid rss cpu command"`
+		`COLUMNS=9999 ps ax -o "pid uid user ppid rss cpu command"`
 	end
 
 	# Parse a single line of the ps command and return the values in a hash
 	# suitable for use in the Rush::Process#new.
 	def parse_ps(line)
-		m = line.split(" ", 6)
+		m = line.split(' ', 7)
 		params = {}
 		params[:pid] = m[0]
 		params[:uid] = m[1]
-		params[:parent_pid] = m[2].to_i
-		params[:mem] = m[3].to_i
-		params[:cpu] = m[4].to_i
-		params[:cmdline] = m[5]
-		params[:command] = params[:cmdline].split(" ").first
+		params[:user] = m[2]
+		params[:parent_pid] = m[3].to_i
+		params[:mem] = m[4].to_i
+		params[:cpu] = m[5].to_i
+		params[:cmdline] = m[6]
+		params[:command] = params[:cmdline].split(' ').first
 		params
 	end
 
 	# Process list on Windows.
 	def windows_processes
 		require 'win32ole'
-		wmi = WIN32OLE.connect("winmgmts://")
-		wmi.ExecQuery("select * from win32_process").map do |proc_info|
+		wmi = WIN32OLE.connect('winmgmts://')
+		wmi.ExecQuery('SELECT * FROM win32_process').map do |proc_info|
 			parse_oleprocinfo(proc_info)
 		end
 	end

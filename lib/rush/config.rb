@@ -23,7 +23,7 @@ class Rush::Config
 	end
 
 	def load_history
-		history_file.contents_or_blank.split("\n")
+		history_file.contents_or_blank.unpack('C*').pack('U*').split("\n")
 	end
 
 	# The environment file is executed when the interactive shell starts up.
