@@ -126,7 +126,7 @@ module Rush
 				(box[path].methods - Object.methods).select do |e|
 					e.match(/^#{Regexp.escape(partial_name)}/)
 				end.map do |e|
-					(pre || '') + receiver + dot + e
+					(pre || '') + receiver + dot + e.to_s
 				end
 			end
 		end
@@ -141,9 +141,9 @@ module Rush
 			box = eval("#{possible_var}.box", @pure_binding) rescue nil
 			if full_path and box
 				Rush::Dir.new(full_path, box).entries.select do |e|
-					e.name.match(/^#{Regexp.escape(partial_path)}/)
+					e.name.match(/^#{Regexp.escape(partial_path)}/i)
 				end.map do |e|
-					(pre || '') + original_var + accessor + quote + fixed_path + e.name + (e.dir? ? "/" : "")
+					(pre || '') + original_var + accessor + quote + fixed_path + e.name + (e.dir? ? '/' : '')
 				end
 			end
 		end
@@ -153,9 +153,9 @@ module Rush
 			gvars = eval('global_variables', @pure_binding)
 			ivars = eval('instance_variables', @pure_binding)
 			(lvars + gvars + ivars).select do |e|
-				e.match(/^#{Regexp.escape(partial_name)}/)
+				e.match(/^#{Regexp.escape(partial_name)}/i)
 			end.map do |e|
-				(pre || '') + e
+				(pre || '') + e.to_s
 			end
 		end
 
